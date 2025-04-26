@@ -8,7 +8,30 @@ const cellDecorationsMap = new Map();
 
 function activate(context) {
     let hoverProviderRegistered = false;
-
+    function formatTime(timeInMicroseconds) {
+        if (!timeInMicroseconds) return 'N/A';
+    
+        const timeInMilliseconds = timeInMicroseconds / 1000;
+        const timeInSeconds = timeInMilliseconds / 1000;
+        const timeInMinutes = timeInSeconds / 60;
+    
+        if (timeInMinutes >= 1) {
+            // If time is greater than or equal to a minute
+            return `${timeInMinutes.toFixed(2)} min`;
+        } else if (timeInSeconds >= 1) {
+            // If time is greater than or equal to a second but less than a minute
+            return `${timeInSeconds.toFixed(2)} s`;
+        } else if (timeInMilliseconds >= 1) {
+            // If time is greater than or equal to a millisecond but less than a second
+            return `${timeInMilliseconds.toFixed(2)} ms`;
+        } else {
+            // Time is too small to convert (in microseconds)
+            return `${timeInMicroseconds.toFixed(2)} µs`;
+        }
+    }
+    
+    
+    
     const classifyCell = (cellData) => {
         const percent_runtime = cellData.percent_time || 0;
         const avg_time_per_hit = (cellData.total_time || 0) / (cellData.total_hits || 1);
@@ -126,7 +149,7 @@ function activate(context) {
                                                 range: new vscode.Range(lineNumber, lineLength, lineNumber, lineLength),
                                                 renderOptions: {
                                                     after: {
-                                                        contentText: ` ⏱ ${lineData.time ? lineData.time.toFixed(2) : 'N/A'} µs | ⚡ ${lineData.percent ? lineData.percent.toFixed(2) : 'N/A'}%`,
+                                                        contentText: `⏱ ${formatTime(lineData.time)}  | ⚡ ${lineData.percent ? lineData.percent.toFixed(2) : 'N/A'}%`,
                                                         color: color,
                                                         fontStyle: 'italic',
                                                         margin: '0 0 0 1rem',
@@ -143,7 +166,7 @@ function activate(context) {
                                     const category = classifyCell(cellData);
                                     const color = colorForCategory(category);
 
-                                    const summaryText = `Total time: ⏱ ${totalTime.toFixed(2)} µs | Total hits: ${totalHits} | Classification: ${category}`;
+                                    const summaryText = `Total time: ⏱ ${formatTime(totalTime)} | Total hits: ${totalHits} | Classification: ${category}`;
 
                                     const lastLineIndex = lines.length - 1;
                                     const lastLineLength = lines[lastLineIndex].length;
