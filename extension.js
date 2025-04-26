@@ -9,6 +9,40 @@ const cellDecorationsMap = new Map();
 function activate(context) {
     let hoverProviderRegistered = false;
 
+    const classifyCell = (cellData) => {
+        const percent_runtime = cellData.percent_time || 0;
+        const avg_time_per_hit = (cellData.total_time || 0) / (cellData.total_hits || 1);
+        const total_hits = cellData.total_hits || 0;
+        const mem_impact = cellData.memory_delta_mb || 0;
+
+        if (percent_runtime > 30) {
+            return "Performance-Critical";
+        } else if (avg_time_per_hit > 1e3) { // >1ms
+            return "CPU-Intensive";
+        } else if (total_hits > 1e4 && avg_time_per_hit < 100) {
+            return "Loop-Intensive";
+        } else if (mem_impact > 0.3) {
+            return "Memory-Intensive";
+        } else {
+            return "Normal";
+        }
+    };
+
+    const colorForCategory = (category) => {
+        switch (category) {
+            case "Performance-Critical":
+                return "red";
+            case "CPU-Intensive":
+                return "orange";
+            case "Loop-Intensive":
+                return "green";
+            case "Memory-Intensive":
+                return "purple";
+            default:
+                return "gray";
+        }
+    };
+
     const applyDecorationsToEditor = (editor) => {
         const docUri = editor.document.uri.toString();
         const decorations = cellDecorationsMap.get(docUri);
@@ -21,11 +55,6 @@ function activate(context) {
 
     vscode.window.onDidChangeVisibleTextEditors((editors) => {
         editors.forEach(applyDecorationsToEditor);
-    });
-
-    vscode.workspace.onDidChangeTextDocument((e) => {
-        // Optional: clear decorations on edit if needed
-        // cellDecorationsMap.delete(e.document.uri.toString());
     });
 
     context.subscriptions.push(
@@ -64,6 +93,7 @@ function activate(context) {
                             const raw = fs.readFileSync(profilerOutput, 'utf-8');
                             const profilingData = JSON.parse(raw);
                             const profilingCells = profilingData.cells;
+                            console.log(raw);
 
                             const notebook = notebookEditor.notebook;
                             const allCells = notebook.getCells();
@@ -83,21 +113,51 @@ function activate(context) {
 
                                     const decorations = [];
 
+                                    // Inline stats decoration (for each line)
                                     Object.entries(cellData.lines).forEach(([lineNumStr, lineData]) => {
                                         const lineNumber = parseInt(lineNumStr) - 1;
                                         if (lineNumber >= 0 && lineNumber < lines.length) {
                                             const lineLength = lines[lineNumber].length;
+
+                                            const category = classifyCell(lineData);
+                                            const color = colorForCategory(category);
+
                                             decorations.push({
                                                 range: new vscode.Range(lineNumber, lineLength, lineNumber, lineLength),
                                                 renderOptions: {
                                                     after: {
-                                                        contentText: ` ⏱ ${lineData.time.toFixed(2)} µs | ⚡ ${lineData.percent.toFixed(2)}%`,
-                                                        color: 'gray',
+                                                        contentText: ` ⏱ ${lineData.time ? lineData.time.toFixed(2) : 'N/A'} µs | ⚡ ${lineData.percent ? lineData.percent.toFixed(2) : 'N/A'}%`,
+                                                        color: color,
                                                         fontStyle: 'italic',
                                                         margin: '0 0 0 1rem',
+                                                        fontWeight: 'bold',
                                                     }
                                                 }
                                             });
+                                        }
+                                    });
+
+                                    // Cell summary stats decoration
+                                    const totalTime = cellData.total_time || 0;
+                                    const totalHits = cellData.total_hits || 0;
+                                    const category = classifyCell(cellData);
+                                    const color = colorForCategory(category);
+
+                                    const summaryText = `Total time: ⏱ ${totalTime.toFixed(2)} µs | Total hits: ${totalHits} | Classification: ${category}`;
+
+                                    const lastLineIndex = lines.length - 1;
+                                    const lastLineLength = lines[lastLineIndex].length;
+
+                                    decorations.push({
+                                        range: new vscode.Range(lastLineIndex, lastLineLength, lastLineIndex, lastLineLength),
+                                        renderOptions: {
+                                            after: {
+                                                contentText: ` | ${summaryText}`,
+                                                color: color,
+                                                fontWeight: 'bold',
+                                                fontStyle: 'italic',
+                                                margin: '0 0 0 1rem',
+                                            }
                                         }
                                     });
 
@@ -106,10 +166,9 @@ function activate(context) {
                                 }
                             }
 
-                            // Apply to all currently visible editors
                             vscode.window.visibleTextEditors.forEach(applyDecorationsToEditor);
 
-                            vscode.window.showInformationMessage("✅ Profiler annotations added to current notebook cells");
+                            vscode.window.showInformationMessage("✅ Profiler annotations added to notebook cells");
 
                             if (!hoverProviderRegistered) {
                                 context.subscriptions.push(
