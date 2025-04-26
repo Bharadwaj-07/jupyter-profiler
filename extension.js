@@ -10,7 +10,7 @@ function activate(context) {
     let hoverProviderRegistered = false;
     function formatTime(timeInMicroseconds) {
         if (!timeInMicroseconds) return 'N/A';
-    
+        timeInMicroseconds = parseFloat(timeInMicroseconds)/10;
         const timeInMilliseconds = timeInMicroseconds / 1000;
         const timeInSeconds = timeInMilliseconds / 1000;
         const timeInMinutes = timeInSeconds / 60;
